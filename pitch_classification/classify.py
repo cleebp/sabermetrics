@@ -16,51 +16,52 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_score
 
 # implement KNN algorithm for combinations of horizontal movement, vertical movement, and start speed
 def knn(train_file, test_file):
     data = pd.read_csv(train_file, header=0)
     #test = pd.read_csv(test_file, header=0)
 
-    # predict and score for horizontal movement [10] and vertical movement [11]
-    # first subset the data
-    X = np.array(data.ix[:, 10:12])  # x0 .. pfx_z
+    # predict and score for...
+    # horizontal movement [10] and vertical movement [11]
+    # spin direction [17] and spin rate[16]
+    # start speed [5] and vertical motion [21]
+    X = np.array(data.ix[:, [5,10,17]])
     label = np.array(data['pitch_type'])
     X_train, X_test, label_train, label_test = train_test_split(X, label, test_size=0.33, random_state=42)
 
-    # next setup KNN, fit, predict, and evaluate accuracy
-    knn = KNeighborsClassifier(n_neighbors=10)
-    knn.fit(X_train, label_train)
-    pred = knn.predict(X_test)
-    HV_score = accuracy_score(label_test, pred)
-
-    # predict and score for start speed [5] and vertical movement [11]
-    # first subset the data
-    X = np.array(data.ix[:, [5,11]])
-    X_train, X_test, label_train, label_test = train_test_split(X, label, test_size=0.33, random_state=42)
+    # cross validate to find optimal number of K
+    k = cross_validate(X, label)
 
     # next setup KNN, fit, predict, and evaluate accuracy
+    knn = KNeighborsClassifier(n_neighbors=k)
     knn.fit(X_train, label_train)
     pred = knn.predict(X_test)
-    SV_score = accuracy_score(label_test, pred)
-
-    # predict and score for start speed [5] and horizontal movement [10]
-    # first subset the data
-    X = np.array(data.ix[:, [5, 10]])
-    X_train, X_test, label_train, label_test = train_test_split(X, label, test_size=0.33, random_state=42)
-
-    # next setup KNN, fit, predict, and evaluate accuracy
-    knn.fit(X_train, label_train)
-    pred = knn.predict(X_test)
-    HS_score = accuracy_score(label_test, pred)
+    score = accuracy_score(label_test, pred)
 
     print("\nAccuracy values...\n")
-    print("Using horizontal movement and vertical movement:")
-    print(str(HV_score) + "\n")
-    print("Using start speed and vertical movement:")
-    print(str(SV_score) + "\n")
-    print("Using horizontal movement and start speed:")
-    print(str(HS_score) + "\n")
+    print("Using start speed, horizontal movement, and spin direction:")
+    print(str(score) + "\n")
+
+def cross_validate(X_train, y_train):
+    # creating odd list of Ks
+    neighbors = list(range(1, 50, 2))
+    cv_scores = []
+
+    # 10-fold cross validation
+    for k in neighbors:
+        knn = KNeighborsClassifier(n_neighbors=k)
+        scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
+        cv_scores.append(scores.mean())
+
+    # changing to misclassification error
+    MSE = [1 - x for x in cv_scores]
+
+    # determining best k
+    optimal_k = neighbors[MSE.index(min(MSE))]
+    print("The optimal number of neighbors is " + str(optimal_k))
+    return optimal_k
 
 # implement KNN for all combinations of possible feature pairs, display the strongest results
 def feature_explore(train_file, test_file):
@@ -98,8 +99,8 @@ def main():
     train_file = sys.argv[1]
     test_file = sys.argv[2]
 
+    # feature_explore(train_file, test_file)
     knn(train_file, test_file)
 
-    feature_explore(train_file, test_file)
 
 main()
